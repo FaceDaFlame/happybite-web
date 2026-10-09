@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useProducts } from '@/context/productsContext'
-import { productCategories } from '@/data/catalogProducts'
+import ProductRequestStatus from '@/components/ProductRequestStatus'
 import { stockStatus } from '@/data/productStore'
 import Icon from '@/components/Icon'
 import ProductEditor from './components/ProductEditor'
@@ -9,7 +9,15 @@ import ProductTable from './components/ProductTable'
 import { exportCatalogPdf } from './utils/catalogPdf'
 
 export default function ManajemenProduk() {
-  const { products, duplicateProduct, deleteProduct } = useProducts()
+  const {
+    products,
+    categories,
+    loading,
+    error,
+    reload,
+    duplicateProduct,
+    deleteProduct,
+  } = useProducts()
   const [params, setParams] = useSearchParams()
   const query = params.get('q') || ''
   const [category, setCategory] = useState('all')
@@ -20,6 +28,7 @@ export default function ManajemenProduk() {
   const [editor, setEditor] = useState(null)
   const [notice, setNotice] = useState('')
   const [deleting, setDeleting] = useState(null)
+  const [acting, setActing] = useState(false)
   const closeEditor = useCallback(() => setEditor(null), [setEditor])
   const filtered = products.filter(
     (p) =>
@@ -33,12 +42,18 @@ export default function ManajemenProduk() {
   const currentPage = Math.min(page, pages)
   const start = (currentPage - 1) * perPage
   const visible = filtered.slice(start, start + perPage)
-  function action(callback, message) {
+  async function action(callback, message) {
+    if (acting) return false
+    setActing(true)
     try {
-      callback()
+      await callback()
       setNotice(message)
+      return true
     } catch (error) {
       setNotice(error.message)
+      return false
+    } finally {
+      setActing(false)
     }
   }
   return (
@@ -65,6 +80,7 @@ export default function ManajemenProduk() {
           </button>
           <button
             type="button"
+            disabled={loading || error || !categories.length || acting}
             onClick={() => setEditor({ product: null })}
             className="inline-flex items-center justify-center gap-2 rounded-full bg-baked px-4 py-2.5 text-xs font-semibold text-white shadow-soft hover:bg-terracotta"
           >
@@ -80,12 +96,7 @@ export default function ManajemenProduk() {
         <div className="flex flex-wrap gap-2">
           {[
             { id: 'all', label: 'Semua Produk' },
-            ...productCategories.filter(
-              (c) =>
-                ['stuffed', 'signature', 'bundles', 'seasonal'].includes(
-                  c.id,
-                ) || products.some((p) => p.category === c.id),
-            ),
+            ...categories.map((c) => ({ id: c.slug, label: c.nama })),
           ].map((c) => (
             <button
               key={c.id}
@@ -161,8 +172,13 @@ export default function ManajemenProduk() {
           <div className="mt-3 flex gap-4">
             <button
               type="button"
-              onClick={() => {
-                action(() => deleteProduct(deleting.id), 'Produk dihapus.')
+              disabled={acting}
+              onClick={async () => {
+                const deleted = await action(
+                  () => deleteProduct(deleting.id),
+                  'Produk dihapus.',
+                )
+                if (!deleted) return
                 if (editor?.product?.id === deleting.id) setEditor(null)
                 setDeleting(null)
               }}
@@ -177,96 +193,108 @@ export default function ManajemenProduk() {
         </div>
       )}
       <section className="rounded-2xl shadow-soft">
-        <ProductTable
-          products={visible}
-          selected={selected}
-          onSelect={(id) =>
-            setSelected((s) =>
-              s.includes(id) ? s.filter((v) => v !== id) : [...s, id],
-            )
-          }
-          onSelectAll={() =>
-            setSelected((s) =>
-              visible.every((p) => s.includes(p.id))
-                ? s.filter((id) => !visible.some((p) => p.id === id))
-                : [...new Set([...s, ...visible.map((p) => p.id)])],
-            )
-          }
-          onEdit={(product) => setEditor({ product })}
-          onDuplicate={(id) =>
-            action(
-              () => duplicateProduct(id),
-              'Salinan produk dibuat sebagai draft.',
-            )
-          }
-          onDelete={setDeleting}
-        />
-        <footer className="flex flex-wrap items-center justify-between gap-4 rounded-b-2xl bg-peach/50 px-5 py-5 text-xs text-muted">
-          <span>
-            Menampilkan {filtered.length ? start + 1 : 0} -{' '}
-            {Math.min(start + perPage, filtered.length)} dari {filtered.length}{' '}
-            Varian Cookie Aktif
-          </span>
-          <label className="flex items-center gap-2">
-            Per Halaman:
-            <select
-              value={perPage}
-              onChange={(e) => {
-                setPerPage(Number(e.target.value))
-                setPage(1)
-              }}
-              className="rounded-full border border-muted/50 bg-white px-2 py-1 text-chocolate"
-            >
-              {[8, 12, 20].map((n) => (
-                <option key={n} value={n}>
-                  {n} Varian
-                </option>
-              ))}
-            </select>
-          </label>
-          <nav aria-label="Pagination produk" className="flex flex-wrap gap-1">
-            <button
-              type="button"
-              aria-label="Halaman sebelumnya"
-              disabled={currentPage === 1}
-              onClick={() => setPage(currentPage - 1)}
-              className="rounded-full bg-white px-3 py-2 disabled:opacity-30"
-            >
-              ‹
-            </button>
-            {Array.from({ length: pages }, (_, i) => i + 1)
-              .filter(
-                (n) => n === 1 || n === pages || Math.abs(n - currentPage) <= 1,
-              )
-              .map((n) => (
+        {loading || error ? (
+          <ProductRequestStatus loading={loading} onRetry={reload} />
+        ) : (
+          <>
+            <ProductTable
+              busy={acting}
+              products={visible}
+              selected={selected}
+              onSelect={(id) =>
+                setSelected((s) =>
+                  s.includes(id) ? s.filter((v) => v !== id) : [...s, id],
+                )
+              }
+              onSelectAll={() =>
+                setSelected((s) =>
+                  visible.every((p) => s.includes(p.id))
+                    ? s.filter((id) => !visible.some((p) => p.id === id))
+                    : [...new Set([...s, ...visible.map((p) => p.id)])],
+                )
+              }
+              onEdit={(product) => setEditor({ product })}
+              onDuplicate={(id) =>
+                action(
+                  () => duplicateProduct(id),
+                  'Salinan produk dibuat sebagai draft.',
+                )
+              }
+              onDelete={setDeleting}
+            />
+            <footer className="flex flex-wrap items-center justify-between gap-4 rounded-b-2xl bg-peach/50 px-5 py-5 text-xs text-muted">
+              <span>
+                Menampilkan {filtered.length ? start + 1 : 0} -{' '}
+                {Math.min(start + perPage, filtered.length)} dari{' '}
+                {filtered.length} Varian Cookie Aktif
+              </span>
+              <label className="flex items-center gap-2">
+                Per Halaman:
+                <select
+                  value={perPage}
+                  onChange={(e) => {
+                    setPerPage(Number(e.target.value))
+                    setPage(1)
+                  }}
+                  className="rounded-full border border-muted/50 bg-white px-2 py-1 text-chocolate"
+                >
+                  {[8, 12, 20].map((n) => (
+                    <option key={n} value={n}>
+                      {n} Varian
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <nav
+                aria-label="Pagination produk"
+                className="flex flex-wrap gap-1"
+              >
                 <button
                   type="button"
-                  key={n}
-                  aria-label={`Halaman ${n}`}
-                  aria-current={currentPage === n ? 'page' : undefined}
-                  onClick={() => setPage(n)}
-                  className={`h-8 w-8 rounded-full ${currentPage === n ? 'bg-baked text-white' : 'bg-white'}`}
+                  aria-label="Halaman sebelumnya"
+                  disabled={currentPage === 1}
+                  onClick={() => setPage(currentPage - 1)}
+                  className="rounded-full bg-white px-3 py-2 disabled:opacity-30"
                 >
-                  {n}
+                  ‹
                 </button>
-              ))}
-            <button
-              type="button"
-              aria-label="Halaman berikutnya"
-              disabled={currentPage === pages}
-              onClick={() => setPage(currentPage + 1)}
-              className="rounded-full bg-white px-3 py-2 disabled:opacity-30"
-            >
-              ›
-            </button>
-          </nav>
-        </footer>
+                {Array.from({ length: pages }, (_, i) => i + 1)
+                  .filter(
+                    (n) =>
+                      n === 1 || n === pages || Math.abs(n - currentPage) <= 1,
+                  )
+                  .map((n) => (
+                    <button
+                      type="button"
+                      key={n}
+                      aria-label={`Halaman ${n}`}
+                      aria-current={currentPage === n ? 'page' : undefined}
+                      onClick={() => setPage(n)}
+                      className={`h-8 w-8 rounded-full ${currentPage === n ? 'bg-baked text-white' : 'bg-white'}`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                <button
+                  type="button"
+                  aria-label="Halaman berikutnya"
+                  disabled={currentPage === pages}
+                  onClick={() => setPage(currentPage + 1)}
+                  className="rounded-full bg-white px-3 py-2 disabled:opacity-30"
+                >
+                  ›
+                </button>
+              </nav>
+            </footer>
+          </>
+        )}
       </section>
       {editor && (
         <ProductEditor
           key={editor.product?.id || 'new'}
           product={editor.product}
           onClose={closeEditor}
+          onSavingChange={setActing}
         />
       )}
     </div>

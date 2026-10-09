@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useNotifications } from '@/context/notificationsContext'
 import { relativeTime } from '@/data/notifications'
 import Icon from '@/components/Icon'
@@ -11,8 +11,26 @@ const filters = [
 ]
 
 export default function NotificationPanel({ onClose }) {
-  const { notifications, unreadCount, markAllRead, markRead } =
-    useNotifications()
+  const {
+    notifications,
+    unreadCount,
+    markAllRead,
+    markRead,
+    loading,
+    error,
+    realtimeError,
+    busy,
+    refreshNotifications,
+  } = useNotifications()
+  const navigate = useNavigate()
+  async function openNotification(item) {
+    if (busy) return
+    const success = item.read || (await markRead(item.id))
+    if (success && item.linkedOrderId) {
+      onClose()
+      navigate('/riwayat-pesanan')
+    }
+  }
   const [filter, setFilter] = useState('all')
   const [now, setNow] = useState(Date.now)
   const dialog = useRef(null)
@@ -123,7 +141,7 @@ export default function NotificationPanel({ onClose }) {
             <button
               type="button"
               onClick={markAllRead}
-              disabled={!unreadCount}
+              disabled={!unreadCount || busy || loading}
               className="rounded text-[11px] font-semibold text-baked hover:underline disabled:cursor-default disabled:text-muted disabled:no-underline"
             >
               ✓ Tandai Semua Dibaca
@@ -131,14 +149,36 @@ export default function NotificationPanel({ onClose }) {
           </div>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          {visible.length ? (
+          {(error || realtimeError) && (
+            <div role="alert" className="p-5 text-center text-xs text-baked">
+              <p>{error || realtimeError}</p>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={refreshNotifications}
+                className="mt-2 underline"
+              >
+                Muat Ulang Notifikasi
+              </button>
+            </div>
+          )}
+          {loading ? (
+            <p role="status" className="p-10 text-center text-sm text-muted">
+              Memuat notifikasi...
+            </p>
+          ) : visible.length ? (
             <ul className="divide-y divide-primary/15">
               {visible.map((item) => (
                 <li
                   key={item.id}
                   className={`flex items-start gap-3 p-5 sm:gap-4 sm:p-6 ${item.read ? 'bg-white' : 'bg-canvas'}`}
                 >
-                  <div className="min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={() => openNotification(item)}
+                    disabled={busy}
+                    className="min-w-0 flex-1 text-left"
+                  >
                     <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
                       <h3 className="min-w-0 flex-1 break-words text-sm font-bold leading-6 sm:text-lg">
                         {item.title}
@@ -159,34 +199,29 @@ export default function NotificationPanel({ onClose }) {
                       {item.description}
                     </p>
                     {item.linkedOrderId && (
-                      <Link
-                        to="/riwayat-pesanan"
-                        onClick={() => {
-                          markRead(item.id)
-                          onClose()
-                        }}
-                        className="mt-3 flex items-center justify-end gap-1 rounded-full border border-primary/15 bg-white px-4 py-3 text-[11px] font-bold text-baked hover:bg-peach"
-                      >
+                      <span className="mt-3 flex items-center justify-end gap-1 rounded-full border border-primary/15 bg-white px-4 py-3 text-[11px] font-bold text-baked hover:bg-peach">
                         <Icon name="receipt" className="h-3.5 w-3.5" />
                         Lihat Rincian Pesanan →
-                      </Link>
+                      </span>
                     )}
-                  </div>
+                  </button>
                 </li>
               ))}
             </ul>
           ) : (
-            <div className="px-6 py-16 text-center">
-              <Icon name="bell" className="mx-auto h-8 w-8 text-primary" />
-              <p className="mt-3 text-sm font-semibold">
-                {filter === 'all'
-                  ? 'Belum ada notifikasi.'
-                  : 'Belum ada notifikasi di kategori ini.'}
-              </p>
-              <p className="mt-2 text-xs leading-5 text-muted">
-                Update pesananmu akan muncul di sini.
-              </p>
-            </div>
+            !error && (
+              <div className="px-6 py-16 text-center">
+                <Icon name="bell" className="mx-auto h-8 w-8 text-primary" />
+                <p className="mt-3 text-sm font-semibold">
+                  {filter === 'all'
+                    ? 'Belum ada notifikasi.'
+                    : 'Belum ada notifikasi di kategori ini.'}
+                </p>
+                <p className="mt-2 text-xs leading-5 text-muted">
+                  Update pesananmu akan muncul di sini.
+                </p>
+              </div>
+            )
           )}
         </div>
         <div

@@ -1,8 +1,10 @@
 import Icon from '@/components/Icon'
-import { fulfillmentOf, fulfillmentStatuses } from '@/data/orderFulfillment'
+import { adminOrderTabs } from '@/services/adminOrderService'
 
 export default function OrdersToolbar({
   orders,
+  onReload,
+  busy,
   status,
   onStatus,
   query,
@@ -25,7 +27,7 @@ export default function OrdersToolbar({
         aria-label="Status pesanan"
         className="flex flex-wrap gap-2"
       >
-        {fulfillmentStatuses.map((tab) => (
+        {adminOrderTabs.map((tab) => (
           <button
             type="button"
             key={tab.id}
@@ -36,7 +38,7 @@ export default function OrdersToolbar({
             {tab.label} (
             {tab.id === 'all'
               ? orders.length
-              : orders.filter((o) => fulfillmentOf(o) === tab.id).length}
+              : orders.filter((o) => o.status === tab.id).length}
             )
           </button>
         ))}
@@ -88,11 +90,20 @@ export default function OrdersToolbar({
         </select>
         <button
           type="button"
+          disabled={busy}
           onClick={onExport}
           className="flex items-center justify-center gap-2 rounded-full bg-peach px-4 py-2.5 text-xs font-semibold hover:bg-blush"
         >
           <Icon name="download" className="h-4 w-4" />
           Ekspor CSV
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onReload}
+          className="flex items-center justify-center gap-2 rounded-full bg-peach px-4 py-2.5 text-xs font-semibold hover:bg-blush"
+        >
+          Muat Ulang
         </button>
       </div>
     </section>

@@ -25,12 +25,9 @@ export default function AppRoutes({
   setGift,
   checkout,
   setCheckout,
-  order,
-  currentOrder,
   addToCart,
   buyNow,
-  startPayment,
-  confirmPayment,
+  completeCheckout,
 }) {
   return (
     <Routes>
@@ -61,7 +58,17 @@ export default function AppRoutes({
           }
         />
         <Route
-          path="/katalog/:productId"
+          path="/katalog/:slug"
+          element={
+            <ProductDetail
+              cartCount={cartCount}
+              onAddToCart={addToCart}
+              onBuyNow={buyNow}
+            />
+          }
+        />
+        <Route
+          path="/produk/:slug"
           element={
             <ProductDetail
               cartCount={cartCount}
@@ -79,22 +86,17 @@ export default function AppRoutes({
               gift={gift}
               form={checkout}
               setForm={setCheckout}
-              onContinue={startPayment}
+              onCreated={completeCheckout}
             />
           }
         />
         <Route
           path="/pembayaran"
-          element={
-            <Payment
-              key={order?.id}
-              cartCount={cartCount}
-              cartItems={cartItems}
-              checkout={checkout}
-              order={order?.status === 'placed' ? order : currentOrder}
-              onConfirm={confirmPayment}
-            />
-          }
+          element={<Navigate to="/checkout" replace />}
+        />
+        <Route
+          path="/pembayaran/:orderId"
+          element={<Payment cartCount={cartCount} />}
         />
         <Route
           path="/pesanan-berhasil"

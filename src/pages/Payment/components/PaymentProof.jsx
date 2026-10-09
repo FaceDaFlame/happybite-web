@@ -1,10 +1,18 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Icon from '@/components/Icon'
+import { validatePaymentProof } from '@/services/orderService'
 
 export default function PaymentProof({ file, onFile, disabled }) {
   const input = useRef(null)
   const [error, setError] = useState('')
   const [dragging, setDragging] = useState(false)
+  const preview = useRef(null)
+  useEffect(() => {
+    if (!file) return
+    const url = URL.createObjectURL(file)
+    if (preview.current) preview.current.src = url
+    return () => URL.revokeObjectURL(url)
+  }, [file])
   function selectFile(files) {
     if (disabled) return
     setError('')
@@ -14,17 +22,10 @@ export default function PaymentProof({ file, onFile, disabled }) {
       return
     }
     const next = files[0]
-    const types = {
-      'image/jpeg': /\.jpe?g$/i,
-      'image/png': /\.png$/i,
-      'application/pdf': /\.pdf$/i,
-    }
-    if (!Object.hasOwn(types, next.type) || !types[next.type].test(next.name)) {
-      setError('Gunakan file JPG, PNG, atau PDF.')
-      return
-    }
-    if (!next.size || next.size > 5 * 1024 * 1024) {
-      setError('Ukuran file harus lebih dari 0 dan maksimal 5MB.')
+    try {
+      validatePaymentProof(next)
+    } catch (error) {
+      setError(error.message)
       return
     }
     onFile(next)
@@ -37,7 +38,7 @@ export default function PaymentProof({ file, onFile, disabled }) {
       <input
         ref={input}
         type="file"
-        accept="image/jpeg,image/png,application/pdf,.jpg,.jpeg,.png,.pdf"
+        accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
         disabled={disabled}
         aria-label="Pilih bukti pembayaran"
         className="sr-only"
@@ -71,7 +72,7 @@ export default function PaymentProof({ file, onFile, disabled }) {
           Klik atau tarik screenshot bukti transfer di sini
         </span>
         <span id="proof-help" className="text-xs text-muted">
-          Format: JPG, PNG, PDF (Maksimal 5MB)
+          Format: JPG, PNG, WEBP (Maksimal 2 MB)
         </span>
       </button>
       {error && (
@@ -81,7 +82,11 @@ export default function PaymentProof({ file, onFile, disabled }) {
       )}
       {file && (
         <div className="mt-3 flex items-center gap-3 rounded-xl bg-blush p-3">
-          <Icon name="receipt" className="h-5 w-5 text-baked" />
+          <img
+            ref={preview}
+            alt="Preview bukti pembayaran"
+            className="h-14 w-14 rounded-lg object-cover"
+          />
           <div className="min-w-0 flex-1">
             <p className="break-all text-xs font-bold">{file.name}</p>
             <p role="status" className="mt-1 text-[11px] text-baked">
@@ -91,6 +96,7 @@ export default function PaymentProof({ file, onFile, disabled }) {
           <button
             type="button"
             aria-label="Hapus bukti pembayaran"
+            disabled={disabled}
             onClick={() => {
               onFile(null)
               setError('')

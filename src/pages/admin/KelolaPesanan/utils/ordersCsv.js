@@ -1,8 +1,5 @@
-import {
-  customerName,
-  fulfillmentLabels,
-  fulfillmentOf,
-} from '@/data/orderFulfillment'
+import { orderStatusLabels } from '@/services/adminOrderService'
+import { customerName } from '@/data/orderFulfillment'
 
 export function exportOrdersCsv(orders) {
   // Quote all cells and neutralize spreadsheet formulas in customer-entered text.
@@ -27,7 +24,7 @@ export function exportOrdersCsv(orders) {
       'Sumber',
     ],
     ...orders.map((order) => [
-      order.id,
+      order.number,
       order.timestamp,
       customerName(order),
       order.recipient?.whatsapp,
@@ -35,7 +32,7 @@ export function exportOrdersCsv(orders) {
       order.courierNote,
       order.items.map((item) => `${item.quantity}x ${item.name}`).join('; '),
       order.total,
-      fulfillmentLabels[fulfillmentOf(order)],
+      orderStatusLabels[order.status] || order.status,
       order.deliveryMethod || 'Belum ditentukan',
       order.paymentStatus,
       order.source === 'sample' ? 'Demo' : 'Checkout',

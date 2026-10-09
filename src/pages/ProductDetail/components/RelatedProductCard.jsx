@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom'
+import { isProductSoldOut } from '@/services/productMapper'
 
 export default function RelatedProductCard({ product, onAdd }) {
   return (
     <article className="flex min-w-0 flex-col rounded-2xl bg-white p-3 shadow-soft">
       <Link
-        to={`/katalog/${product.id}`}
+        to={`/produk/${product.slug}`}
         className="relative block overflow-hidden rounded-xl"
         aria-label={`Lihat ${product.name}`}
       >
@@ -33,7 +34,7 @@ export default function RelatedProductCard({ product, onAdd }) {
         </p>
         <h3 className="mt-2 text-lg font-bold">
           <Link
-            to={`/katalog/${product.id}`}
+            to={`/produk/${product.slug}`}
             className="rounded hover:text-baked"
           >
             {product.name}
@@ -48,11 +49,12 @@ export default function RelatedProductCard({ product, onAdd }) {
           </p>
           <button
             type="button"
+            disabled={isProductSoldOut(product)}
             onClick={() => onAdd(product)}
             aria-label={`Tambah ${product.name}`}
             className="rounded-full bg-blush/70 px-4 py-2.5 text-sm font-bold hover:bg-blush"
           >
-            + Tambah
+            {isProductSoldOut(product) ? 'Stok Habis' : '+ Tambah'}
           </button>
         </div>
       </div>

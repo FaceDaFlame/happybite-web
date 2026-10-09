@@ -6,14 +6,14 @@ import Icon from '@/components/Icon'
 import SiteDialog from '@/components/SiteDialog'
 import CatalogProductCard from '@/pages/CatalogMenu/components/CatalogProductCard'
 import CatalogVariantDialog from '@/pages/CatalogMenu/components/CatalogVariantDialog'
-import { catalogCategories } from '@/data/catalogProducts'
-import { useProducts } from '@/context/productsContext'
+import { catalogCategories } from '@/data/catalogCategories'
+import { getCatalogProducts } from '@/services/productService'
+import useProductRequest from '@/hooks/useProductRequest'
+import ProductRequestStatus from '@/components/ProductRequestStatus'
 
 export default function CatalogMenu({ cartCount, onAddToCart }) {
-  const { products } = useProducts()
-  const allProducts = products.filter(
-    (p) => p.isLiveOnWebsite && p.isCatalogVisible,
-  )
+  const { data, loading, error, retry } = useProductRequest(getCatalogProducts)
+  const allProducts = data || []
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('all')
   const [visibleCount, setVisibleCount] = useState(8)
@@ -152,7 +152,7 @@ export default function CatalogMenu({ cartCount, onAddToCart }) {
           </div>
 
           <div role="status" aria-live="polite" className="sr-only">
-            {filtered.length} produk ditemukan.
+            {!loading && !error && `${filtered.length} produk ditemukan.`}
           </div>
           <div
             className="mt-10 grid gap-x-5 gap-y-6 sm:grid-cols-2 lg:grid-cols-4"
@@ -169,7 +169,9 @@ export default function CatalogMenu({ cartCount, onAddToCart }) {
               />
             ))}
           </div>
-          {filtered.length === 0 ? (
+          {loading || error ? (
+            <ProductRequestStatus loading={loading} onRetry={retry} />
+          ) : filtered.length === 0 ? (
             <div className="rounded-[30px] bg-white px-6 py-12 text-center shadow-soft">
               <Icon
                 name="search"

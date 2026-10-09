@@ -1,20 +1,38 @@
-import { useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/authContext'
-import { useOrders } from '@/context/ordersContext'
+import { getMyOrders, confirmOrderReceived } from '@/services/orderService'
+import useProductRequest from '@/hooks/useProductRequest'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 import Icon from '@/components/Icon'
 import SiteDialog from '@/components/SiteDialog'
 import OrderHistoryCard from '@/pages/OrderHistory/components/OrderHistoryCard'
 import OrderHistoryDialog from '@/pages/OrderHistory/components/OrderHistoryDialog'
-import { orderStatuses } from '@/data/orderHistory'
+import { customerOrderTabs as orderStatuses } from '@/data/customerOrders'
 import { downloadOrderPdf } from '@/pages/OrderHistory/utils/orderPdf'
 
 export default function OrderHistory({ cartCount }) {
-  const { isLoggedIn } = useAuth()
+  const { isLoggedIn, user, loading } = useAuth()
+  if (loading)
+    return (
+      <p role="status" className="p-8 text-center text-muted">
+        Memuat riwayat pesanan...
+      </p>
+    )
+  if (!isLoggedIn) return <Navigate to="/login" replace />
+  return (
+    <CustomerHistory key={user.id} userId={user.id} cartCount={cartCount} />
+  )
+}
+
+function CustomerHistory({ userId, cartCount }) {
   const navigate = useNavigate()
-  const { orders, updateCourierNote } = useOrders()
+  const loadOrders = useCallback(() => getMyOrders(userId), [userId])
+  const { data, loading, error, retry } = useProductRequest(loadOrders)
+  const orders = data || []
+  const [busy, setBusy] = useState(null)
+  const pending = useRef(false)
   const [reference] = useState(Date.now)
   const [status, setStatus] = useState('all')
   const [query, setQuery] = useState('')
@@ -24,7 +42,6 @@ export default function OrderHistory({ cartCount }) {
   const [dialog, setDialog] = useState(null)
   const [notice, setNotice] = useState('')
   const openAccount = () => navigate('/login')
-  if (!isLoggedIn) return <Navigate to="/login" replace />
   const inPeriod = (order) =>
     days === 'all' ||
     new Date(order.timestamp).getTime() >= reference - Number(days) * 86400000
@@ -32,7 +49,7 @@ export default function OrderHistory({ cartCount }) {
   const filtered = periodOrders.filter(
     (order) =>
       (status === 'all' || order.status === status) &&
-      `${order.id} ${order.items.map((item) => item.name).join(' ')}`
+      `${order.number} ${order.items.map((item) => item.name).join(' ')}`
         .toLocaleLowerCase('id-ID')
         .includes(query.trim().toLocaleLowerCase('id-ID')),
   )
@@ -42,16 +59,22 @@ export default function OrderHistory({ cartCount }) {
     setDays('30')
     setLimit(3)
   }
-  function saveNote(id, note) {
+  async function confirm(order) {
+    if (order.status !== 'dikirim' || pending.current) return
+    pending.current = true
+    setBusy(order.id)
     try {
-      updateCourierNote(id, note)
-    } catch (error) {
-      setNotice(error.message)
-      return
+      await confirmOrderReceived(order.id)
+      setNotice('Pesanan berhasil dikonfirmasi diterima.')
+      retry()
+    } catch {
+      setNotice('Gagal mengonfirmasi pesanan. Coba lagi.')
+    } finally {
+      pending.current = false
+      setBusy(null)
     }
-    setSelected(null)
-    setNotice(`Catatan alamat #${id} berhasil diperbarui.`)
   }
+  const selectedOrder = orders.find((order) => order.id === selected)
   return (
     <div className="flex min-h-dvh flex-col bg-canvas">
       <Navbar
@@ -84,11 +107,6 @@ export default function OrderHistory({ cartCount }) {
             Pantau perjalanan cookie artisan hangatmu dari adonan lembut,
             panggangan oven, hingga tiba tepat waktu di depan pintu rumah.
           </p>
-          <p className="mt-2 text-xs leading-5 text-muted">
-            Pesanan checkout tersimpan di browser ini. Kartu berlabel Demo
-            adalah contoh; tracking dan verifikasi pembayaran belum terhubung ke
-            layanan nyata.
-          </p>
           <div className="mt-6 flex flex-wrap items-center gap-3 rounded-[30px] bg-white p-3 shadow-soft">
             <div
               role="group"
@@ -116,7 +134,7 @@ export default function OrderHistory({ cartCount }) {
                 </button>
               ))}
             </div>
-            <div className="flex min-w-0 flex-1 flex-wrap gap-2 xl:flex-nowrap">
+            <div className="flex min-w-0 flex-1 basis-80 flex-wrap gap-2 xl:flex-nowrap">
               <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full bg-peach px-3 focus-within:ring-2 focus-within:ring-terracotta/30">
                 <Icon name="search" className="h-4 w-4 text-muted" />
                 <label htmlFor="history-search" className="sr-only">
@@ -154,22 +172,50 @@ export default function OrderHistory({ cartCount }) {
             </div>
           </div>
           <p role="status" className="sr-only">
-            {filtered.length} pesanan ditemukan.
+            {loading
+              ? 'Memuat riwayat pesanan...'
+              : `${filtered.length} pesanan ditemukan.`}
           </p>
+          <div className="mt-4 flex justify-end">
+            <button
+              type="button"
+              disabled={loading || Boolean(busy)}
+              onClick={retry}
+              className="rounded-full bg-blush px-5 py-2.5 text-xs font-bold hover:bg-primary"
+            >
+              Muat Ulang
+            </button>
+          </div>
+          {loading && (
+            <p role="status" className="p-10 text-center text-muted">
+              Memuat riwayat pesanan...
+            </p>
+          )}
+          {error && (
+            <div role="alert" className="p-10 text-center text-muted">
+              <p>Gagal memuat riwayat pesanan.</p>
+              <button
+                type="button"
+                onClick={retry}
+                className="mt-3 text-baked underline"
+              >
+                Coba lagi
+              </button>
+            </div>
+          )}
           <div className="mt-6 space-y-6" aria-label="Daftar pesanan">
             {filtered.slice(0, limit).map((order) => (
               <OrderHistoryCard
                 key={order.id}
                 order={order}
-                onDetails={(item) =>
-                  setSelected({ order: item, mode: 'details' })
-                }
-                onEdit={(item) => setSelected({ order: item, mode: 'edit' })}
+                onDetails={(item) => setSelected(item.id)}
+                onConfirm={confirm}
+                busy={Boolean(busy)}
                 onDownload={downloadOrderPdf}
               />
             ))}
           </div>
-          {!filtered.length && (
+          {!loading && !error && !filtered.length && (
             <section className="rounded-[30px] bg-white p-10 text-center shadow-soft">
               <Icon name="receipt" className="mx-auto h-10 w-10 text-primary" />
               <h2 className="mt-4 text-xl font-bold">
@@ -225,13 +271,11 @@ export default function OrderHistory({ cartCount }) {
         </div>
       </main>
       <Footer onAccount={openAccount} onInfo={setDialog} />
-      {selected && (
+      {selectedOrder && (
         <OrderHistoryDialog
-          key={`${selected.order.id}-${selected.mode}`}
-          order={selected.order}
-          mode={selected.mode}
+          key={selectedOrder.id}
+          order={selectedOrder}
           onClose={() => setSelected(null)}
-          onSave={saveNote}
         />
       )}
       {dialog && (

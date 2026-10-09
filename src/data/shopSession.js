@@ -1,4 +1,4 @@
-import { seedProducts } from './catalogProducts'
+import { CART_KEY, normalizeCart, cartLines } from './cartSnapshot'
 
 export const SESSION_KEY = 'happybite-shop-v1'
 export const emptyCheckout = {
@@ -17,19 +17,35 @@ const emptySession = () => ({
   order: null,
 })
 
-export function readShopSession(detailProducts = seedProducts) {
+function readStorage(storage, key) {
   try {
-    const saved = JSON.parse(sessionStorage.getItem(SESSION_KEY))
-    if (!saved || !Array.isArray(saved.cartItems)) return emptySession()
-    const cartItems = saved.cartItems.filter(
-      (item) =>
-        detailProducts.some((product) => product.id === item.productId) &&
-        Number.isSafeInteger(item.quantity) &&
-        item.quantity > 0 &&
-        typeof item.variant === 'string' &&
-        item.id === JSON.stringify([item.productId, item.variant]) &&
-        typeof item.selected === 'boolean',
-    )
+    return JSON.parse(storage.getItem(key))
+  } catch {
+    return null
+  }
+}
+
+export function readShopSession() {
+  try {
+    const legacy = readStorage(localStorage, SESSION_KEY)
+    const saved =
+      readStorage(sessionStorage, SESSION_KEY) || legacy || emptySession()
+    const storedCart = readStorage(localStorage, CART_KEY)
+    const cartItems = normalizeCart(storedCart ?? saved.cartItems)
+    // Remove mock slug IDs from both known legacy storage locations.
+    if (legacy?.cartItems) {
+      try {
+        localStorage.setItem(
+          SESSION_KEY,
+          JSON.stringify({
+            ...legacy,
+            cartItems: normalizeCart(legacy.cartItems),
+          }),
+        )
+      } catch {
+        /* In-memory cleanup still applies if storage is disabled. */
+      }
+    }
     const checkout = Object.fromEntries(
       Object.keys(emptyCheckout).map((key) => [
         key,
@@ -56,37 +72,24 @@ export function readShopSession(detailProducts = seedProducts) {
   }
 }
 
-export function selectedOrderItems(cartItems, detailProducts = seedProducts) {
-  return cartItems
-    .filter((item) => item.selected)
-    .map((item) => ({
-      ...item,
-      product: detailProducts.find((product) => product.id === item.productId),
-    }))
-    .filter((item) => item.product)
+export function selectedOrderItems(cartItems) {
+  return cartLines(cartItems.filter((item) => item.selected))
 }
 
-export function orderFingerprint(
-  cartItems,
-  checkout,
-  gift,
-  detailProducts = seedProducts,
-) {
+export function orderFingerprint(cartItems, checkout, gift) {
   return JSON.stringify({
-    items: selectedOrderItems(cartItems, detailProducts).map(
-      ({ product, ...item }) => ({
-        ...item,
-        price: product.price,
-      }),
-    ),
+    items: selectedOrderItems(cartItems).map(({ product, ...item }) => ({
+      ...item,
+      price: product.price,
+    })),
     checkout,
     gift,
   })
 }
 
 // No shipping or gateway charge is configured in this local checkout.
-export function orderTotals(cartItems, detailProducts = seedProducts) {
-  const subtotal = selectedOrderItems(cartItems, detailProducts).reduce(
+export function orderTotals(cartItems) {
+  const subtotal = selectedOrderItems(cartItems).reduce(
     (sum, item) => sum + item.quantity * item.product.price,
     0,
   )

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
@@ -6,7 +6,8 @@ import SiteDialog from '@/components/SiteDialog'
 import Icon from '@/components/Icon'
 import CheckoutSteps from '@/components/StepProgress'
 import CheckoutField from '@/pages/Checkout/components/CheckoutField'
-import { useProducts } from '@/context/productsContext'
+import { selectedOrderItems } from '@/data/shopSession'
+import { createOrder, orderErrorMessage } from '@/services/orderService'
 
 const rupiah = (amount) => `Rp ${amount.toLocaleString('id-ID')}`
 const regions = [
@@ -27,20 +28,15 @@ export default function Checkout({
   gift,
   form,
   setForm,
-  onContinue,
+  onCreated,
 }) {
-  const { products: detailProducts } = useProducts()
   const navigate = useNavigate()
   const [dialog, setDialog] = useState(null)
   const [errors, setErrors] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+  const pending = useRef(false)
   const openAccount = () => navigate('/login')
-  const items = cartItems
-    .filter((item) => item.selected)
-    .map((item) => ({
-      ...item,
-      product: detailProducts.find((product) => product.id === item.productId),
-    }))
-    .filter((item) => item.product)
+  const items = selectedOrderItems(cartItems)
   const itemCount = items.reduce((count, item) => count + item.quantity, 0)
   const total = items.reduce(
     (sum, item) => sum + item.quantity * item.product.price,
@@ -53,9 +49,9 @@ export default function Checkout({
     setForm((current) => ({ ...current, [name]: value }))
     setErrors((current) => ({ ...current, [name]: '' }))
   }
-  function submit(event) {
+  async function submit(event) {
     event.preventDefault()
-    if (!items.length) return
+    if (!items.length || pending.current) return
     const nextErrors = {}
     if (!form.name.trim()) nextErrors.name = 'Masukkan nama lengkap penerima.'
     if (!/^(?:\+?62|0)8\d{7,12}$/.test(form.whatsapp.replace(/[\s()-]/g, '')))
@@ -74,8 +70,23 @@ export default function Checkout({
     const firstError = Object.keys(nextErrors)[0]
     if (firstError) document.getElementById(`checkout-${firstError}`)?.focus()
     else {
-      onContinue()
-      navigate('/pembayaran')
+      pending.current = true
+      setSubmitting(true)
+      try {
+        // Shipping has not been configured; the existing checkout charges zero.
+        const order = await createOrder(cartItems, {
+          ...form,
+          greeting,
+          shipping: 0,
+        })
+        onCreated()
+        navigate(`/pembayaran/${order.id}`, { replace: true })
+      } catch (error) {
+        setErrors({ submit: orderErrorMessage(error) })
+      } finally {
+        pending.current = false
+        setSubmitting(false)
+      }
     }
   }
   const fieldProps = (name) => ({
@@ -83,6 +94,7 @@ export default function Checkout({
     value: form[name],
     onChange: change,
     error: errors[name],
+    disabled: submitting,
   })
 
   return (
@@ -215,7 +227,7 @@ export default function Checkout({
                       className="flex items-start gap-3 rounded-2xl bg-canvas p-3"
                     >
                       <Link
-                        to={`/katalog/${product.id}`}
+                        to={`/produk/${product.slug}`}
                         className="shrink-0 rounded-xl"
                       >
                         <img
@@ -230,7 +242,7 @@ export default function Checkout({
                         <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
                           <h3 className="text-sm font-bold">
                             <Link
-                              to={`/katalog/${product.id}`}
+                              to={`/produk/${product.slug}`}
                               className="rounded hover:text-baked"
                             >
                               {product.name}
@@ -288,11 +300,18 @@ export default function Checkout({
                 <button
                   type="submit"
                   form="checkout-form"
+                  disabled={submitting}
+                  aria-busy={submitting}
                   className="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-baked px-4 py-3 text-sm font-bold text-white shadow-warm hover:bg-terracotta"
                 >
-                  Lanjut ke Pembayaran
+                  {submitting ? 'Memproses...' : 'Lanjut ke Pembayaran'}
                   <Icon name="arrow" className="h-4 w-4" />
                 </button>
+                {errors.submit && (
+                  <p role="alert" className="mt-3 text-sm text-baked">
+                    {errors.submit}
+                  </p>
+                )}
                 <p className="mt-3 flex items-center justify-center gap-1 text-center text-[10px] text-muted">
                   <Icon name="lock" className="h-3 w-3 text-baked" />
                   Langkah berikutnya: Pembayaran instan via QRIS

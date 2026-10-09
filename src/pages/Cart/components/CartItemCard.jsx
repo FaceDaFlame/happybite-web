@@ -19,7 +19,7 @@ export default function CartItemCard({ item, onChange }) {
         className="h-5 w-5 cursor-pointer accent-baked"
       />
       <Link
-        to={`/katalog/${product.id}`}
+        to={`/produk/${product.slug}`}
         className="relative overflow-hidden rounded-xl"
       >
         <img
@@ -50,7 +50,7 @@ export default function CartItemCard({ item, onChange }) {
         </div>
         <h2 className="text-sm font-bold leading-6 sm:text-lg">
           <Link
-            to={`/katalog/${product.id}`}
+            to={`/produk/${product.slug}`}
             className="rounded hover:text-baked"
           >
             {product.name}

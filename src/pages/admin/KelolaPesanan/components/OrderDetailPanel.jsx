@@ -1,20 +1,19 @@
+import { orderStatusLabels } from '@/services/adminOrderService'
+import PaymentEvidence from './PaymentEvidence'
 import { useEffect, useState } from 'react'
 import Icon from '@/components/Icon'
-import {
-  customerName,
-  fulfillmentLabels,
-  fulfillmentOf,
-  initials,
-  nextFulfillment,
-  orderKey,
-  orderTime,
-} from '@/data/orderFulfillment'
+import { customerName, initials, orderTime } from '@/data/orderFulfillment'
 import { formatRupiah, formatOrderDate } from '@/data/orderHistory'
 import { relativeTime } from '@/data/notifications'
 
-export default function OrderDetailPanel({ order, now, onClose, onAdvance }) {
+export default function OrderDetailPanel({
+  order,
+  now,
+  onClose,
+  onAction,
+  busy,
+}) {
   const [notice, setNotice] = useState('')
-  const [error, setError] = useState('')
   useEffect(() => {
     if (!notice) return
     const timeout = setTimeout(() => setNotice(''), 2500)
@@ -35,29 +34,23 @@ export default function OrderDetailPanel({ order, now, onClose, onAdvance }) {
       </aside>
     )
   const name = customerName(order)
-  const status = fulfillmentOf(order)
-  const next = nextFulfillment[status]
+  const status = order.status
+  const cancellable = [
+    'menunggu_pembayaran',
+    'menunggu_konfirmasi',
+    'diproses',
+    'qc_packing',
+  ].includes(status)
   const count = order.items.reduce((sum, item) => sum + item.quantity, 0)
-  const subtotal = order.items.reduce(
-    (sum, item) => sum + item.quantity * item.price,
-    0,
-  )
+  const subtotal = order.subtotal
   async function copy() {
     try {
-      await navigator.clipboard.writeText(`#${order.id}`)
+      await navigator.clipboard.writeText(order.number)
       setNotice('Nomor pesanan disalin.')
     } catch {
       setNotice(
         'Tidak dapat menyalin otomatis. Silakan salin nomor pesanan di atas.',
       )
-    }
-  }
-  function advance() {
-    setError('')
-    try {
-      onAdvance(orderKey(order), status)
-    } catch (e) {
-      setError(e.message)
     }
   }
   return (
@@ -73,7 +66,7 @@ export default function OrderDetailPanel({ order, now, onClose, onAdvance }) {
                 id="admin-order-title"
                 className="break-words text-lg font-bold"
               >
-                #{order.id}
+                {order.number}
               </h2>
               <button
                 type="button"
@@ -137,6 +130,20 @@ export default function OrderDetailPanel({ order, now, onClose, onAdvance }) {
             )}
           </div>
         </div>
+        <p className="mt-3 text-[11px] text-muted">
+          Metode Kirim: {order.deliveryMethod}
+        </p>
+        {order.recipient?.email && (
+          <p className="mt-1 break-words text-[11px] text-muted">
+            {order.recipient.email}
+          </p>
+        )}
+        {order.greeting && (
+          <div className="mt-3 text-[11px] leading-5">
+            <h4 className="font-bold">Kartu Ucapan</h4>
+            <p className="whitespace-pre-wrap break-words">{order.greeting}</p>
+          </div>
+        )}
       </section>
       <h3 className="mb-4 text-[11px] font-bold">
         RINCIAN MENU ({count} COOKIES)
@@ -167,7 +174,7 @@ export default function OrderDetailPanel({ order, now, onClose, onAdvance }) {
           <dt>Subtotal Produk</dt>
           <dd>{formatRupiah(subtotal)}</dd>
         </div>
-        {order.shipping > 0 && (
+        {order.shipping >= 0 && (
           <div className="flex justify-between gap-3 pb-3">
             <dt>Ongkos Kirim</dt>
             <dd>{formatRupiah(order.shipping)}</dd>
@@ -184,33 +191,87 @@ export default function OrderDetailPanel({ order, now, onClose, onAdvance }) {
           <dd className="text-baked">{formatRupiah(order.total)}</dd>
         </div>
       </dl>
+      <PaymentEvidence
+        key={order.id + (order.payment?.path || '')}
+        payment={order.payment}
+        status={order.paymentStatus}
+      />
       <div className="mt-5 space-y-3">
         <p role="status" className="text-xs text-baked">
-          {fulfillmentLabels[status]}
+          {orderStatusLabels[status] || status}
         </p>
-        {error && (
-          <p role="alert" className="text-xs leading-5 text-red-700">
-            {error}
-          </p>
+        {status === 'menunggu_konfirmasi' && (
+          <>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onAction(order, 'approve')}
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-baked px-4 py-3 text-xs font-semibold text-white shadow-soft hover:bg-terracotta"
+            >
+              {busy ? 'Memproses...' : 'Verifikasi Pembayaran'}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    'Tolak bukti pembayaran pesanan ini? Pelanggan perlu mengirim ulang bukti.',
+                  )
+                )
+                  onAction(order, 'reject')
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-blush/70 px-3 py-3 text-xs font-semibold hover:bg-blush"
+            >
+              Tolak Bukti
+            </button>
+          </>
         )}
-        {next && (
+        {['diproses', 'qc_packing'].includes(status) && (
           <button
             type="button"
-            onClick={advance}
+            disabled={busy}
+            onClick={() =>
+              onAction(order, status === 'diproses' ? 'qc_packing' : 'dikirim')
+            }
             className="flex w-full items-center justify-center gap-2 rounded-full bg-baked px-4 py-3 text-xs font-semibold text-white shadow-soft hover:bg-terracotta"
           >
-            {next.label}
+            {busy
+              ? 'Memproses...'
+              : status === 'diproses'
+                ? 'Lanjut ke QC & Packing'
+                : 'Tandai Dikirim'}
             <Icon name="arrow" className="h-4 w-4" />
           </button>
         )}
-        <button
-          type="button"
-          onClick={() => window.print()}
-          className="flex w-full items-center justify-center gap-2 rounded-full bg-blush/70 px-3 py-3 text-xs font-semibold hover:bg-blush"
-        >
-          <Icon name="receipt" className="h-4 w-4" />
-          Cetak Surat Jalan & Label Box
-        </button>
+        {cancellable && (
+          <>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    'Batalkan pesanan ini? Stok produk akan dikembalikan.',
+                  )
+                )
+                  onAction(order, 'cancel')
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-blush/70 px-3 py-3 text-xs font-semibold hover:bg-blush"
+            >
+              Batalkan Pesanan
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => window.print()}
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-blush/70 px-3 py-3 text-xs font-semibold hover:bg-blush"
+            >
+              <Icon name="receipt" className="h-4 w-4" />
+              Cetak Surat Jalan & Label Box
+            </button>
+          </>
+        )}
       </div>
     </aside>
   )

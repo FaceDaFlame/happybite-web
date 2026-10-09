@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import Icon from '@/components/Icon'
+import { isProductSoldOut } from '@/services/productMapper'
 
 export default function CatalogProductCard({
   product,
@@ -12,7 +13,7 @@ export default function CatalogProductCard({
     <article className="flex h-full min-w-0 flex-col rounded-[30px] bg-white p-3 shadow-soft">
       <div className="relative overflow-hidden rounded-t-[20px]">
         <Link
-          to={`/katalog/${product.id}`}
+          to={`/produk/${product.slug}`}
           aria-label={`Lihat ${product.name}`}
           className="block"
         >
@@ -63,7 +64,7 @@ export default function CatalogProductCard({
         </p>
         <h2 className="mt-2 text-lg font-bold leading-7 tracking-[-.3px]">
           <Link
-            to={`/katalog/${product.id}`}
+            to={`/produk/${product.slug}`}
             className="rounded hover:text-baked"
           >
             {product.name}
@@ -83,13 +84,16 @@ export default function CatalogProductCard({
           </div>
           <button
             type="button"
+            disabled={isProductSoldOut(product)}
             onClick={() =>
               product.variantSelect ? onSelect(product) : onAdd(product)
             }
             aria-label={`${product.variantSelect ? 'Pilih varian' : 'Tambah ke keranjang'} ${product.name}`}
             className={`inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-[11px] font-bold transition-colors ${product.variantSelect ? 'bg-primary text-chocolate hover:bg-golden' : 'bg-baked text-white hover:bg-terracotta'}`}
           >
-            {product.variantSelect ? (
+            {isProductSoldOut(product) ? (
+              'Stok Habis'
+            ) : product.variantSelect ? (
               <>
                 <span>
                   Pilih Varian &<br />

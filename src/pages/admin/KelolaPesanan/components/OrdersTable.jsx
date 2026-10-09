@@ -1,11 +1,5 @@
-import {
-  customerName,
-  fulfillmentLabels,
-  fulfillmentOf,
-  initials,
-  orderKey,
-  orderTime,
-} from '@/data/orderFulfillment'
+import { orderStatusLabels } from '@/services/adminOrderService'
+import { customerName, initials, orderTime } from '@/data/orderFulfillment'
 import { formatRupiah } from '@/data/orderHistory'
 import { relativeTime } from '@/data/notifications'
 
@@ -36,24 +30,24 @@ export default function OrdersTable({ orders, selectedKey, onSelect, now }) {
         </thead>
         <tbody>
           {orders.map((order) => {
-            const selected = selectedKey === orderKey(order)
+            const selected = selectedKey === order.id
             const name = customerName(order)
             const summary = order.items
               .map((item) => `${item.quantity}× ${item.name}`)
               .join(', ')
             return (
               <tr
-                key={orderKey(order)}
-                onClick={() => onSelect(orderKey(order))}
+                key={order.id}
+                onClick={() => onSelect(order.id)}
                 className={`cursor-pointer border-b border-peach last:border-0 ${selected ? 'bg-peach/80 ring-1 ring-inset ring-baked/60' : 'hover:bg-canvas'}`}
               >
                 <td className="pl-3 py-5">
                   <input
                     type="radio"
                     name="selected-admin-order"
-                    aria-label={`Pilih pesanan ${order.id}`}
+                    aria-label={`Pilih pesanan ${order.number}`}
                     checked={selected}
-                    onChange={() => onSelect(orderKey(order))}
+                    onChange={() => onSelect(order.id)}
                     className="h-3.5 w-3.5 accent-baked"
                   />
                 </td>
@@ -61,7 +55,7 @@ export default function OrdersTable({ orders, selectedKey, onSelect, now }) {
                   <p
                     className={`break-words font-bold ${selected ? 'text-baked' : ''}`}
                   >
-                    #{order.id}
+                    {order.number}
                   </p>
                   <p className="mt-1 text-[10px] leading-4 text-muted">
                     <time dateTime={order.timestamp}>
@@ -70,7 +64,7 @@ export default function OrdersTable({ orders, selectedKey, onSelect, now }) {
                     • {relativeTime(order.timestamp, now)}
                   </p>
                   <p className="mt-1 text-[10px] text-baked">
-                    {fulfillmentLabels[fulfillmentOf(order)]}
+                    {orderStatusLabels[order.status] || order.status}
                   </p>
                   {order.source === 'sample' && (
                     <p className="mt-1 text-[10px] text-muted">

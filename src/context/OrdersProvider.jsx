@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuth } from './authContext'
 import { useProducts } from './productsContext'
 import { OrdersContext } from './ordersContext'
-import { useNotifications } from './notificationsContext'
 import { ORDERS_KEY, createSampleOrders, readStoredOrders } from '@/data/orders'
 import {
   fulfillmentOf,
@@ -20,7 +19,6 @@ function initialOrders() {
 
 export default function OrdersProvider({ children }) {
   const { withOrderInventory } = useProducts()
-  const { notifyOrder } = useNotifications()
   const { user } = useAuth()
   const ownerEmail = user?.email.trim().toLowerCase()
   const [allOrders, setAllOrders] = useState(initialOrders)
@@ -71,13 +69,11 @@ export default function OrdersProvider({ children }) {
     withOrderInventory(placed, () => {
       commit((latest) => [placed, ...latest])
     })
-    notifyOrder(placed)
   }
 
   function advanceOrder(key, expectedStatus) {
     if (user?.role !== 'admin')
       throw new Error('Hanya admin yang dapat mengubah status pesanan.')
-    let changed
     commit((orders) =>
       orders.map((order) => {
         if (orderKey(order) !== key) return order
@@ -87,7 +83,7 @@ export default function OrdersProvider({ children }) {
           return order
         const fulfillmentStatus = nextFulfillment[currentStatus].status
         const timestamp = new Date().toISOString()
-        changed = {
+        const changed = {
           ...order,
           fulfillmentStatus,
           updatedAt: timestamp,
@@ -106,7 +102,6 @@ export default function OrdersProvider({ children }) {
         return changed
       }),
     )
-    if (changed) notifyOrder(changed)
   }
 
   function updateCourierNote(id, note) {

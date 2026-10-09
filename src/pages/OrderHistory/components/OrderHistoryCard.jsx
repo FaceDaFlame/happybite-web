@@ -1,27 +1,29 @@
 import Icon from '@/components/Icon'
-import OrderTracking from './OrderTracking'
+import { Link } from 'react-router-dom'
 import { formatOrderDate, formatRupiah } from '@/data/orderHistory'
-import { fulfillmentLabels, fulfillmentOf } from '@/data/orderFulfillment'
+import { customerOrderLabels } from '@/data/customerOrders'
+import OrderItemImage from './OrderItemImage'
 
 export default function OrderHistoryCard({
   order,
   onDetails,
-  onEdit,
+  onConfirm,
+  busy,
   onDownload,
 }) {
-  const completed = order.status === 'completed'
+  const completed = order.status === 'selesai'
   return (
     <article
       aria-labelledby={`order-${order.id}`}
       className="relative overflow-hidden rounded-[30px] bg-white p-5 shadow-soft sm:p-6"
     >
-      {order.status === 'shipping' && (
+      {order.status === 'dikirim' && (
         <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-baked to-golden" />
       )}
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h2 id={`order-${order.id}`} className="text-lg font-bold">
-            #{order.id}
+            {order.number}
           </h2>
           <span aria-hidden="true" className="text-primary/60">
             •
@@ -29,49 +31,11 @@ export default function OrderHistoryCard({
           <time dateTime={order.timestamp} className="text-xs text-muted">
             {formatOrderDate(order.timestamp)}
           </time>
-          {order.source === 'sample' && (
-            <span className="rounded-full bg-cream px-2 py-1 text-[10px] font-bold text-baked">
-              Demo · Data contoh
-            </span>
-          )}
         </div>
-        {order.status === 'processing' && (
-          <span className="rounded-full bg-blush/70 px-3 py-1.5 text-[10px] font-bold text-baked">
-            {order.source === 'checkout'
-              ? fulfillmentLabels[fulfillmentOf(order)]
-              : 'Diproses Dapur'}
-          </span>
-        )}
-        {completed && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-blush/70 px-3 py-1.5 text-[10px] font-bold text-baked">
-            <Icon name="seal" className="h-3.5 w-3.5" />
-            Selesai Diterima • {formatOrderDate(order.deliveredAt)}
-          </span>
-        )}
-        {order.source === 'checkout' && order.status === 'shipping' && (
-          <span className="rounded-full bg-blush/70 px-3 py-1.5 text-[10px] font-bold text-baked">
-            Sedang Dikirim
-          </span>
-        )}
+        <span className="rounded-full bg-blush/70 px-3 py-1.5 text-[10px] font-bold text-baked">
+          {customerOrderLabels[order.status] || order.status}
+        </span>
       </header>
-      {order.source === 'sample' && order.status === 'shipping' && (
-        <OrderTracking
-          stage={order.trackingStage}
-          times={order.trackingTimes}
-          estimatedArrival={order.estimatedArrival}
-        />
-      )}
-      {completed && (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-canvas px-3 py-2 text-xs leading-5 text-muted">
-          <p className="flex items-start gap-1.5">
-            <Icon name="seal" className="mt-0.5 h-4 w-4 text-baked" />
-            {order.deliveryNote}
-          </p>
-          <span className="text-[10px] font-bold text-baked">
-            Pengiriman Sukses
-          </span>
-        </div>
-      )}
       {order.sectionLabel && (
         <h3 className="mb-3 mt-5 text-[11px] font-bold text-muted">
           {order.sectionLabel}
@@ -84,13 +48,10 @@ export default function OrderHistoryCard({
             className="flex min-w-0 items-center gap-3 rounded-xl bg-peach p-2.5"
           >
             <div className="relative shrink-0">
-              <img
-                src={item.image}
-                alt={item.name}
-                width="80"
-                height="80"
-                loading="lazy"
-                className={`${order.status === 'shipping' ? 'h-20 w-20' : 'h-16 w-16'} rounded-lg object-cover`}
+              <OrderItemImage
+                image={item.image}
+                name={item.name}
+                large={order.status === 'dikirim'}
               />
               <span className="absolute bottom-1 right-1 rounded-full bg-white px-1.5 py-0.5 text-[9px] font-bold">
                 ×{item.quantity}
@@ -98,7 +59,7 @@ export default function OrderHistoryCard({
             </div>
             <div className="min-w-0 flex-1">
               <h3
-                className={`font-semibold leading-6 ${order.status === 'shipping' ? 'text-base sm:text-lg' : 'text-sm'}`}
+                className={`font-semibold leading-6 ${order.status === 'dikirim' ? 'text-base sm:text-lg' : 'text-sm'}`}
               >
                 {item.name}
               </h3>
@@ -151,30 +112,38 @@ export default function OrderHistoryCard({
               : `${order.paymentStatus} (${order.paymentMethod})`}
           </span>
         </p>
-        {order.status === 'processing' && (
-          <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-wrap items-center gap-4">
+          {order.status === 'menunggu_pembayaran' && (
+            <Link
+              to={'/pembayaran/' + order.id}
+              className="rounded-full bg-baked px-5 py-2.5 text-xs font-bold text-white hover:bg-terracotta"
+            >
+              Lanjutkan Pembayaran
+            </Link>
+          )}
+          {order.status === 'dikirim' && (
             <button
               type="button"
-              onClick={() => onEdit(order)}
-              className="inline-flex items-center gap-1 rounded text-xs font-bold hover:text-baked"
+              disabled={busy}
+              onClick={() => onConfirm(order)}
+              className="rounded-full bg-baked px-5 py-2.5 text-xs font-bold text-white hover:bg-terracotta"
             >
-              <Icon name="note" className="h-4 w-4" />
-              Ubah Catatan Alamat
+              {busy ? 'Memproses...' : 'Konfirmasi Pesanan Diterima'}
             </button>
-            <button
-              type="button"
-              onClick={() => onDetails(order)}
-              className="rounded-full bg-blush px-5 py-2.5 text-xs font-bold hover:bg-primary"
-            >
-              Detail Pesanan
-            </button>
-          </div>
-        )}
+          )}
+          <button
+            type="button"
+            onClick={() => onDetails(order)}
+            className="rounded-full bg-blush px-5 py-2.5 text-xs font-bold hover:bg-primary"
+          >
+            Detail Pesanan
+          </button>
+        </div>
         {completed && (
           <button
             type="button"
             onClick={() => onDownload(order)}
-            aria-label={`Unduh PDF ${order.id}`}
+            aria-label={`Unduh PDF ${order.number}`}
             className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold hover:text-baked"
           >
             <Icon name="download" className="h-4 w-4" />

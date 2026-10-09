@@ -1,112 +1,104 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useAuth } from './authContext'
 import { ProductsContext } from './productsContext'
-import { reserveOrderInventory } from '@/data/orderInventory'
+import useProductRequest from '@/hooks/useProductRequest'
+import { getCategories } from '@/services/productService'
 import {
-  PRODUCTS_KEY,
-  parseProducts,
-  prepareProduct,
-  readProducts,
-} from '@/data/productStore'
+  getAdminProducts,
+  createProduct,
+  updateProduct,
+  removeProduct,
+} from '@/services/adminProductService'
 
 export default function ProductsProvider({ children }) {
-  const [products, setProducts] = useState(readProducts)
-  const current = useRef(products)
   const { user } = useAuth()
+  const adminId = user?.role === 'admin' ? user.id : null
+  const load = useCallback(async () => {
+    if (!adminId) return { products: [], categories: [] }
+    const [products, categories] = await Promise.all([
+      getAdminProducts(),
+      getCategories(),
+    ])
+    return { products, categories }
+  }, [adminId])
+  const { data, loading, error, retry } = useProductRequest(load)
+  const busy = useRef(false)
   useEffect(() => {
-    function sync(event) {
-      if (event.key !== PRODUCTS_KEY && event.key !== null) return
-      try {
-        const next = event.newValue
-          ? parseProducts(event.newValue)
-          : readProducts()
-        if (next) {
-          current.current = next
-          setProducts(next)
-        }
-      } catch {
-        /* Ignore malformed external storage writes. */
-      }
-    }
-    window.addEventListener('storage', sync)
-    return () => window.removeEventListener('storage', sync)
-  }, [])
-
-  function commit(next) {
-    if (user?.role !== 'admin')
-      throw new Error('Hanya admin yang dapat mengubah produk.')
+    // One-time cleanup only: never restore or persist the legacy fixture list.
     try {
-      localStorage.setItem(PRODUCTS_KEY, JSON.stringify(next))
+      localStorage.removeItem('happybite-products-v1')
     } catch {
-      throw new Error(
-        'Produk belum tersimpan. Penyimpanan browser penuh atau tidak tersedia; coba foto yang lebih kecil.',
-      )
+      /* Storage may be disabled. */
     }
-    current.current = next
-    setProducts(next)
+  }, [])
+  async function mutate(callback) {
+    if (!adminId) throw new Error('Hanya admin yang dapat mengubah produk.')
+    if (busy.current)
+      throw new Error('Perubahan masih diproses. Tunggu sebentar.')
+    busy.current = true
+    try {
+      const result = await callback()
+      retry()
+      return result
+    } catch (error) {
+      if (error.code === '42501')
+        throw new Error(
+          'Akses ditolak. Pastikan akun admin memiliki izin mengubah produk.',
+          { cause: error },
+        )
+      throw new Error(error.message || 'Produk gagal disimpan. Coba lagi.', {
+        cause: error,
+      })
+    } finally {
+      busy.current = false
+    }
   }
+  const products = adminId ? data?.products || [] : []
+  const categories = adminId ? data?.categories || [] : []
   function saveProduct(values, id) {
-    const existing = id ? current.current.find((p) => p.id === id) : null
-    if (id && !existing)
-      throw new Error(
-        'Produk ini sudah dihapus. Tutup panel dan muat ulang daftar.',
-      )
-    const product = prepareProduct(values, existing)
-    commit(
+    return mutate(() =>
       id
-        ? current.current.map((p) => (p.id === id ? product : p))
-        : [...current.current, product],
+        ? updateProduct(id, values, categories)
+        : createProduct(values, categories),
     )
   }
   function duplicateProduct(id) {
-    const source = current.current.find((p) => p.id === id)
-    if (!source) return
-    const duplicate = prepareProduct({
-      ...source,
-      name: `${source.name} (Salinan)`,
-      isLiveOnWebsite: false,
-    })
-    commit([...current.current, duplicate])
+    const product = products.find((p) => p.id === id)
+    if (!product)
+      return Promise.reject(
+        new Error('Produk tidak ditemukan. Muat ulang daftar.'),
+      )
+    return mutate(() =>
+      createProduct(
+        {
+          ...product,
+          sku: '',
+          name: product.name + ' (Salinan)',
+          image: product.gambarUrl,
+          isLiveOnWebsite: false,
+        },
+        categories,
+      ),
+    )
   }
   function deleteProduct(id) {
-    commit(current.current.filter((p) => p.id !== id))
+    return mutate(() => removeProduct(id))
   }
-
   function withOrderInventory(order, saveOrder) {
     if (!user || order.ownerEmail !== user.email.trim().toLowerCase())
       throw new Error('Silakan masuk untuk menyimpan pesanan.')
-    // Read the latest persisted inventory, including edits from another tab.
-    const previous = readProducts()
-    const next = reserveOrderInventory(previous, order)
-    try {
-      localStorage.setItem(PRODUCTS_KEY, JSON.stringify(next))
-    } catch {
-      throw new Error(
-        'Stok belum tersimpan. Izinkan penyimpanan browser atau kosongkan ruang, lalu coba lagi. Keranjang tetap tersimpan.',
-      )
-    }
-    try {
-      saveOrder()
-    } catch (error) {
-      // Failed order persistence must not consume stock. If storage also blocks
-      // rollback, keep the reservation ID so a retry cannot deduct it twice.
-      try {
-        localStorage.setItem(PRODUCTS_KEY, JSON.stringify(previous))
-        current.current = previous
-        setProducts(previous)
-      } catch {
-        current.current = next
-        setProducts(next)
-      }
-      throw error
-    }
-    current.current = next
-    setProducts(next)
+    // Orders are still local. Atomic DB stock deduction belongs to the later
+    // backend checkout integration; never fall back to mock inventory.
+    saveOrder()
   }
   return (
     <ProductsContext.Provider
       value={{
         products,
+        categories,
+        loading: !!adminId && loading,
+        error: !!adminId && error,
+        reload: retry,
         saveProduct,
         duplicateProduct,
         deleteProduct,

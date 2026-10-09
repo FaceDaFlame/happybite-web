@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import Icon from '@/components/Icon'
-import { productCategories } from '@/data/catalogProducts'
 import { stockStatus } from '@/data/productStore'
 
 export default function ProductTable({
   products,
+  busy,
   selected,
   onSelect,
   onSelectAll,
@@ -99,9 +99,7 @@ export default function ProductTable({
                       </p>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px]">
                         <span className="rounded-full bg-blush px-2 py-1">
-                          {productCategories.find(
-                            (c) => c.id === product.category,
-                          )?.label || product.category}
+                          {product.categoryName || product.category}
                         </span>
                         <span className="text-muted">{product.sku}</span>
                         {!product.isLiveOnWebsite && (
@@ -136,6 +134,7 @@ export default function ProductTable({
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
+                      disabled={busy}
                       onClick={() => onEdit(product)}
                       aria-label={`Edit ${product.name}`}
                       className="flex items-center gap-1 rounded-full border border-golden bg-golden/15 px-3 py-1.5 text-baked"
@@ -146,6 +145,7 @@ export default function ProductTable({
                     <div data-product-menu className="relative">
                       <button
                         type="button"
+                        disabled={busy}
                         aria-label={`Aksi ${product.name}`}
                         aria-expanded={menu === product.id}
                         onClick={() =>

@@ -1,49 +1,68 @@
-// Different box combinations keep separate line items.
+import { cartLineId, isUuid } from './cartSnapshot'
+import { isProductSoldOut } from '../services/productMapper'
+
+// Each line stores a product snapshot; variants have separate lineId values.
 export function cartReducer(items, action) {
   switch (action.type) {
     case 'buyNow': {
-      const { productId, quantity, variant = '' } = action
-      if (!Number.isSafeInteger(quantity) || quantity < 1) return items
-      const id = JSON.stringify([productId, variant])
+      const { product, quantity, variant = '' } = action
+      if (
+        !isUuid(product?.id) ||
+        isProductSoldOut(product) ||
+        !Number.isSafeInteger(quantity) ||
+        quantity < 1
+      )
+        return items
+      const lineId = cartLineId(product.id, variant)
       const otherItems = items
-        .filter((item) => item.id !== id)
+        .filter((item) => item.lineId !== lineId)
         .map((item) => ({ ...item, selected: false }))
       return [
         ...otherItems,
-        { id, productId, quantity, variant, selected: true },
+        { ...product, lineId, quantity, variant, selected: true },
       ]
     }
     case 'add': {
-      const { productId, quantity = 1, variant = '' } = action
-      if (!Number.isSafeInteger(quantity) || quantity < 1) return items
-      const id = JSON.stringify([productId, variant])
-      const existing = items.find((item) => item.id === id)
+      const { product, quantity = 1, variant = '' } = action
+      if (
+        !isUuid(product?.id) ||
+        isProductSoldOut(product) ||
+        !Number.isSafeInteger(quantity) ||
+        quantity < 1
+      )
+        return items
+      const lineId = cartLineId(product.id, variant)
+      const existing = items.find((item) => item.lineId === lineId)
+      if (existing && !Number.isSafeInteger(existing.quantity + quantity))
+        return items
       return existing
         ? items.map((item) =>
-            item.id === id
+            item.lineId === lineId
               ? { ...item, quantity: item.quantity + quantity, selected: true }
               : item,
           )
-        : [...items, { id, productId, variant, quantity, selected: true }]
+        : [...items, { ...product, lineId, variant, quantity, selected: true }]
     }
     case 'quantity':
       return Number.isSafeInteger(action.quantity) && action.quantity >= 1
         ? items.map((item) =>
-            item.id === action.id
+            item.lineId === action.id
               ? { ...item, quantity: action.quantity }
               : item,
           )
         : items
     case 'select':
       return items.map((item) =>
-        item.id === action.id ? { ...item, selected: action.selected } : item,
+        item.lineId === action.id
+          ? { ...item, selected: action.selected }
+          : item,
       )
     case 'selectAll':
       return items.map((item) => ({ ...item, selected: action.selected }))
     case 'remove':
-      return items.filter((item) => item.id !== action.id)
+      return items.filter((item) => item.lineId !== action.id)
     case 'removeOrdered':
-      return items.filter((item) => !action.ids.includes(item.id))
+      return items.filter((item) => !action.ids.includes(item.lineId))
     case 'clear':
       return []
     default:

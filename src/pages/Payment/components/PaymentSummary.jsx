@@ -8,6 +8,10 @@ export default function PaymentSummary({
   items,
   totals,
   expired,
+  status,
+  itemsLoading,
+  itemsError,
+  onRetryItems,
 }) {
   const count = items.reduce((sum, item) => sum + item.quantity, 0)
   return (
@@ -15,32 +19,67 @@ export default function PaymentSummary({
       <section className="flex flex-wrap items-center justify-between gap-3 rounded-[30px] bg-white p-5 shadow-soft sm:p-6">
         <div>
           <h2 className="text-[10px] font-bold text-muted">NOMOR PESANAN</h2>
-          <p className="mt-1 break-all text-base font-bold">#{order.id}</p>
+          <p className="mt-1 break-all text-base font-bold">
+            {order.no_pesanan}
+          </p>
         </div>
         <span
           role="status"
           className="rounded-full bg-blush px-3 py-1 text-[10px] font-bold text-baked"
         >
-          {expired ? 'Waktu Habis' : 'Menunggu Bayar'}
+          {expired
+            ? 'Waktu Habis'
+            : status === 'menunggu_pembayaran'
+              ? 'Menunggu Bayar'
+              : status === 'menunggu_konfirmasi'
+                ? 'Menunggu Verifikasi'
+                : String(status).replaceAll('_', ' ')}
         </span>
       </section>
       <section className="rounded-[30px] bg-white p-5 shadow-soft sm:p-6">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">Rincian Menu Artisan</h2>
-          <span className="rounded-full bg-peach px-2 py-1 text-[10px] font-bold">
-            {count} Pcs Cookies
-          </span>
+          {items.length > 0 && (
+            <span className="rounded-full bg-peach px-2 py-1 text-[10px] font-bold">
+              {count} Pcs Cookies
+            </span>
+          )}
         </div>
+        {itemsLoading ? (
+          <p role="status" className="text-xs text-muted">
+            Memuat rincian menu...
+          </p>
+        ) : itemsError ? (
+          <div role="alert" className="text-xs text-muted">
+            <p>Rincian menu belum dapat dimuat.</p>
+            <button
+              type="button"
+              onClick={onRetryItems}
+              className="mt-2 font-semibold text-baked underline"
+            >
+              Coba lagi
+            </button>
+          </div>
+        ) : !items.length ? (
+          <p className="text-xs text-muted">Rincian menu belum tersedia.</p>
+        ) : null}
         <ul className="space-y-5">
           {items.map(({ id, product, quantity, variant }) => (
             <li key={id} className="flex items-start gap-3">
-              <img
-                src={product.image}
-                alt={product.name}
-                width="60"
-                height="60"
-                className="h-14 w-14 rounded-lg object-cover"
-              />
+              {product.image ? (
+                <img
+                  src={product.image}
+                  alt={product.name}
+                  width="60"
+                  height="60"
+                  className="h-14 w-14 rounded-lg object-cover"
+                />
+              ) : (
+                <Icon
+                  name="cookie"
+                  className="h-14 w-14 rounded-lg text-baked"
+                />
+              )}
               <div className="min-w-0 flex-1">
                 <h3 className="text-xs font-bold leading-5">{product.name}</h3>
                 {variant && <p className="text-[10px] text-muted">{variant}</p>}

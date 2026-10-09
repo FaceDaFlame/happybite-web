@@ -1,7 +1,7 @@
 import ProductCard from './ProductCard'
 import SectionHeading from './SectionHeading'
 import CatalogGateBanner from './CatalogGateBanner'
-import { products } from '@/data/products'
+import { gallery } from '@/data/homeGallery'
 import { Reveal } from '@/components/Animation'
 import Stagger from './Stagger'
 
@@ -17,7 +17,7 @@ export default function GalleryShowcase({ onAccount }) {
           Prancis dan cokelat Belgia pilihan.
         </SectionHeading>
         <Stagger className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {products.map((product) => (
+          {gallery.map((product) => (
             <ProductCard key={product.name} {...product} />
           ))}
         </Stagger>

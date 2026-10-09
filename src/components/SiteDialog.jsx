@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Icon from './Icon'
-import { products } from '@/data/products'
+import { gallery } from '@/data/homeGallery'
 
 const faqs = [
   [
@@ -43,7 +43,7 @@ export default function SiteDialog({ kind, onClose, onAccount }) {
   }, [])
 
   const title = kind === 'search' ? 'Cari gigitan bahagiamu' : kind
-  const matches = products.filter((product) =>
+  const matches = gallery.filter((product) =>
     `${product.name} ${product.description}`
       .toLowerCase()
       .includes(query.toLowerCase().trim()),

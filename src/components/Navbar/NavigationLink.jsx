@@ -1,4 +1,4 @@
-import { Link, NavLink } from 'react-router-dom'
+import { Link, NavLink, useMatch } from 'react-router-dom'
 import Icon from '@/components/Icon'
 
 export default function NavigationLink({
@@ -8,6 +8,7 @@ export default function NavigationLink({
   locked = false,
   onClick,
 }) {
+  const productDetail = useMatch('/produk/:slug')
   const className = mobile
     ? 'block rounded-xl px-4 py-3 text-sm font-semibold transition hover:bg-blush'
     : 'rounded-full px-3 py-3 text-xs font-semibold transition hover:bg-blush xl:px-4'
@@ -24,7 +25,7 @@ export default function NavigationLink({
       end={to === '/'}
       onClick={onClick}
       className={({ isActive }) =>
-        `${className} ${isActive ? 'bg-blush text-chocolate' : 'text-muted'}`
+        `${className} ${isActive || (to === '/katalog' && productDetail) ? 'bg-blush text-chocolate' : 'text-muted'}`
       }
     >
       {locked && (

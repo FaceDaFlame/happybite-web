@@ -1,24 +1,25 @@
+import { customerOrderLabels } from '@/data/customerOrders'
 import { formatOrderDate, formatRupiah } from '@/data/orderHistory'
 
-// Small text-only sample receipt; no payment verification or backend is implied.
+// Text-only order summary using the immutable order_items snapshot.
 export function downloadOrderPdf(order) {
   const lines = [
-    'HappyBite - Ringkasan Pesanan Contoh',
-    `Invoice: #${order.id}`,
+    'HappyBite - Ringkasan Pesanan',
+    `Invoice: ${order.number}`,
     `Tanggal: ${formatOrderDate(order.timestamp)}`,
-    `Status: ${order.status}`,
+    `Status: ${customerOrderLabels[order.status]}`,
     '',
     ...order.items.map(
       (item) =>
         `${item.name} (${item.quantity} pcs) - ${formatRupiah(item.quantity * item.price)}`,
     ),
     '',
-    `Subtotal: ${formatRupiah(order.total - order.shipping)}`,
+    `Subtotal: ${formatRupiah(order.subtotal)}`,
     `Pengiriman: ${formatRupiah(order.shipping)}`,
     `Total: ${formatRupiah(order.total)}`,
     `Pembayaran: ${order.paymentStatus} (${order.paymentMethod})`,
     '',
-    'Dokumen demo proyek sekolah, bukan bukti transaksi resmi.',
+    'Ringkasan pesanan HappyBite.',
   ]
   const escape = (value) =>
     value
@@ -47,7 +48,7 @@ export function downloadOrderPdf(order) {
   const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' }))
   const link = document.createElement('a')
   link.href = url
-  link.download = `${order.id}.pdf`
+  link.download = `${order.number}.pdf`
   document.body.append(link)
   link.click()
   link.remove()

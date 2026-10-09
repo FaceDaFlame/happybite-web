@@ -6,8 +6,9 @@ import Icon from '@/components/Icon'
 import SiteDialog from '@/components/SiteDialog'
 import ProductGallery from '@/pages/ProductDetail/components/ProductGallery'
 import RelatedProductCard from '@/pages/ProductDetail/components/RelatedProductCard'
-import { catalogCategories } from '@/data/catalogProducts'
-import { useProducts } from '@/context/productsContext'
+import { catalogCategories } from '@/data/catalogCategories'
+import ProductRequestStatus from '@/components/ProductRequestStatus'
+import { isProductSoldOut } from '@/services/productMapper'
 
 const rupiah = (value) => `Rp ${value.toLocaleString('id-ID')}`
 export default function ProductDetailContent({
@@ -15,8 +16,12 @@ export default function ProductDetailContent({
   cartCount,
   onAddToCart,
   onBuyNow,
+  related = [],
+  relatedError,
+  loading,
+  error,
+  onRetry,
 }) {
-  const { products: detailProducts } = useProducts()
   const navigate = useNavigate()
   const [quantity, setQuantity] = useState(1)
   const [variant, setVariant] = useState(product?.variants?.[0] || '')
@@ -24,16 +29,13 @@ export default function ProductDetailContent({
   const [notice, setNotice] = useState('')
   const openAccount = () => navigate('/login')
   const category =
+    product?.categoryName ||
     catalogCategories.find((item) => item.id === product?.category)?.label ||
     'Minuman Teman Cookie'
-  const related =
-    product?.relatedProductIds
-      .map((id) =>
-        detailProducts.find((item) => item.id === id && item.isLiveOnWebsite),
-      )
-      .filter(Boolean) || []
+  const soldOut = product ? isProductSoldOut(product) : false
 
   function addProduct(item, count = 1) {
+    if (isProductSoldOut(item)) return
     onAddToCart(
       item,
       count,
@@ -50,7 +52,11 @@ export default function ProductDetailContent({
         onSearch={() => navigate('/katalog#catalog-search')}
       />
       <main className="flex-1 bg-canvas">
-        {!product ? (
+        {loading || error ? (
+          <div className="mx-auto max-w-[1320px] px-5 py-12 lg:px-8">
+            <ProductRequestStatus loading={loading} onRetry={onRetry} />
+          </div>
+        ) : !product ? (
           <div className="mx-auto max-w-xl px-5 py-24 text-center">
             <Icon name="cookie" className="mx-auto h-12 w-12 text-primary" />
             <h1 className="mt-5 text-3xl font-bold">Produk tidak ditemukan</h1>
@@ -107,7 +113,7 @@ export default function ProductDetailContent({
                 <p className="mt-6 text-sm leading-7 sm:text-base">
                   {product.fullDescription}
                 </p>
-                {product.variants && (
+                {product.variantSelect && (
                   <fieldset className="mt-5">
                     <legend className="mb-2 text-sm font-bold">
                       Pilihan Varian
@@ -184,13 +190,15 @@ export default function ProductDetailContent({
                     <button
                       type="button"
                       onClick={() => addProduct(product, quantity)}
+                      disabled={soldOut}
                       className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-baked px-3 py-3 text-xs font-bold text-white shadow-warm hover:bg-terracotta"
                     >
-                      <Icon name="cart" className="h-5 w-5" />+ Masukkan
-                      Keranjang
+                      <Icon name="cart" className="h-5 w-5" />
+                      {soldOut ? 'Stok Habis' : '+ Masukkan Keranjang'}
                     </button>
                     <button
                       type="button"
+                      disabled={soldOut}
                       onClick={() => {
                         onBuyNow(product, quantity, variant)
                         navigate('/checkout')
@@ -228,6 +236,7 @@ export default function ProductDetailContent({
               >
                 Pas Dinikmati Bersama
               </h2>
+              {relatedError && <ProductRequestStatus onRetry={onRetry} />}
               <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 {related.map((item) => (
                   <RelatedProductCard
