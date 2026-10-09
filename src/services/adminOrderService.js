@@ -83,6 +83,30 @@ export async function getAllOrders() {
   if (error) throw error
   return (data || []).map(mapAdminOrder)
 }
+
+// Reports need the full sales history, while the live operations table is
+// intentionally capped to its newest 200 rows. Page through Supabase here.
+export async function getReportOrders() {
+  const pageSize = 500
+  const rows = []
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from('orders')
+      .select(
+        '*, order_items(id, product_id, nama_produk, harga_satuan, jumlah), payments(id, nominal, status, uploaded_at)',
+      )
+      .order('created_at', { ascending: false })
+      .range(offset, offset + pageSize - 1)
+    if (error) {
+      console.error('getReportOrders', error)
+      throw error
+    }
+    rows.push(...(data || []))
+    if (!data || data.length < pageSize) break
+  }
+  return rows.map(mapAdminOrder)
+}
+
 export async function getPaymentProofUrl(path) {
   const { data, error } = await supabase.storage
     .from('payment-proofs')

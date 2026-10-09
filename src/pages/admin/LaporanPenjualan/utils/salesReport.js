@@ -32,9 +32,7 @@ export function ordersInRange(orders, start, end) {
   if (!validDate(start) || !validDate(end) || start > end) return []
   return orders.filter(
     (order) =>
-      order.source === 'checkout' &&
-      dateKey(order.timestamp) >= start &&
-      dateKey(order.timestamp) <= end,
+      dateKey(order.timestamp) >= start && dateKey(order.timestamp) <= end,
   )
 }
 
@@ -115,13 +113,24 @@ export function salesTrend(orders, start, end, grouping) {
 }
 
 export function paymentStatus(order) {
-  if (
-    order.status === 'cancelled' ||
-    order.paymentStatus?.toLowerCase() === 'dibatalkan'
-  )
-    return 'cancelled'
-  if (order.paymentStatus?.toLowerCase() === 'lunas') return 'paid'
-  return 'pending'
+  if (order.paymentStatus?.toLowerCase() === 'lunas') return 'lunas'
+  if (order.paymentStatus?.toLowerCase() === 'ditolak') return 'ditolak'
+  if (order.paymentStatus?.toLowerCase() === 'menunggu verifikasi')
+    return 'menunggu_verifikasi'
+  return 'belum_dibayar'
+}
+
+export function paymentStatusLabel(order) {
+  return {
+    lunas: 'Lunas',
+    menunggu_verifikasi: 'Menunggu Verifikasi',
+    belum_dibayar: 'Belum Dibayar',
+    ditolak: 'Ditolak',
+  }[paymentStatus(order)]
+}
+
+export function isQualifyingSale(order) {
+  return order.status !== 'dibatalkan' && paymentStatus(order) === 'lunas'
 }
 
 export const reportDate = (date) =>

@@ -1,6 +1,8 @@
 import { customerName } from '@/data/orderFulfillment'
 import { formatOrderDate, formatRupiah } from '@/data/orderHistory'
 import { periodLabel, reportStats } from './salesReport'
+import { orderStatusLabels } from '@/services/adminOrderService'
+import { paymentStatusLabel } from './salesReport'
 
 function download(contents, type, filename) {
   const url = URL.createObjectURL(new Blob([contents], { type }))
@@ -30,13 +32,13 @@ export function exportReportCsv(orders, start, end) {
     ],
     ...orders.map((o) => [
       formatOrderDate(o.timestamp),
-      o.id,
+      o.number,
       customerName(o),
       o.recipient?.whatsapp,
       o.items.map((i) => `${i.quantity}x ${i.name}`).join('; '),
       o.total,
-      o.paymentStatus,
-      o.status,
+      paymentStatusLabel(o),
+      orderStatusLabels[o.status] || o.status,
     ]),
   ]
   download(
@@ -47,7 +49,7 @@ export function exportReportCsv(orders, start, end) {
 }
 
 export function exportReportPdf(orders, start, end) {
-  // A simple paginated text PDF; uses real filtered order snapshots, without charts/images.
+  // Practical printable text PDF with real qualifying orders; charts remain in the app.
   const stats = reportStats(orders)
   const lines = [
     'HappyBite - Laporan Penjualan & Analisis Finansial',
@@ -56,15 +58,15 @@ export function exportReportPdf(orders, start, end) {
     `Total Pesanan: ${stats.count}`,
     `Rata-rata Order: ${formatRupiah(Math.round(stats.aov))}`,
     `Produk Terlaris: ${stats.top?.name || '-'}`,
-    'Seluruh nilai pesanan checkout dalam periode; bukan konfirmasi dana diterima.',
+    'Hanya pesanan lunas dan tidak dibatalkan; pendapatan termasuk ongkir.',
     '',
     ...orders.flatMap((o) => [
-      `#${o.id} | ${formatOrderDate(o.timestamp)}`,
+      `${o.number} | ${formatOrderDate(o.timestamp)}`,
       `${customerName(o)} | ${o.recipient?.whatsapp || '-'}`,
       ...o.items.map(
         (i) => `${i.quantity}x ${i.name} @ ${formatRupiah(i.price)}`,
       ),
-      `Total: ${formatRupiah(o.total)} | ${o.paymentStatus}`,
+      `Total: ${formatRupiah(o.total)} | ${paymentStatusLabel(o)}`,
       '',
     ]),
   ].flatMap((line) => String(line).match(/.{1,88}/g) || [''])

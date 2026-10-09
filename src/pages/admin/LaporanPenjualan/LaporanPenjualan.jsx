@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useOrders } from '@/context/ordersContext'
+import { getReportOrders } from '@/services/adminOrderService'
+import useProductRequest from '@/hooks/useProductRequest'
 import Icon from '@/components/Icon'
 import { customerName } from '@/data/orderFulfillment'
 import { formatRupiah } from '@/data/orderHistory'
@@ -11,6 +12,7 @@ import {
   dateKey,
   defaultRange,
   ordersInRange,
+  isQualifyingSale,
   paymentStatus,
   reportStats,
   validDate,
@@ -18,23 +20,32 @@ import {
 import { exportReportCsv, exportReportPdf } from './utils/reportExports'
 
 export default function LaporanPenjualan() {
-  const { adminOrders } = useOrders()
-  const orders = adminOrders.filter((order) => order.source === 'checkout')
+  const loadOrders = useCallback(() => getReportOrders(), [])
+  const {
+    data: loadedOrders,
+    loading,
+    error,
+    retry,
+  } = useProductRequest(loadOrders)
+  const orders = loadedOrders || []
   const [today] = useState(() => dateKey(Date.now()))
   const [customRange, setCustomRange] = useState(null)
   const range = customRange || defaultRange(orders, today)
   const validRange =
     validDate(range.start) && validDate(range.end) && range.start <= range.end
   const periodOrders = ordersInRange(orders, range.start, range.end)
-  const stats = reportStats(periodOrders)
+  const salesOrders = periodOrders.filter(isQualifyingSale)
+  const stats = reportStats(salesOrders)
   const [params, setParams] = useSearchParams()
   const query = params.get('q') || ''
   const [payment, setPayment] = useState('all')
+  const [orderStatus, setOrderStatus] = useState('all')
   const [page, setPage] = useState(1)
   const filtered = periodOrders.filter(
     (order) =>
       (payment === 'all' || paymentStatus(order) === payment) &&
-      `${order.id} ${customerName(order)}`
+      (orderStatus === 'all' || order.status === orderStatus) &&
+      `${order.number} ${order.id} ${customerName(order)}`
         .toLocaleLowerCase('id-ID')
         .includes(query.trim().replace(/^#/, '').toLocaleLowerCase('id-ID')),
   )
@@ -94,6 +105,7 @@ export default function LaporanPenjualan() {
             </button>
             <button
               type="button"
+              disabled={loading || error}
               onClick={() => window.print()}
               className={actionClass}
             >
@@ -102,9 +114,9 @@ export default function LaporanPenjualan() {
             </button>
             <button
               type="button"
-              disabled={!validRange}
+              disabled={!validRange || loading || error}
               onClick={() =>
-                exportReportPdf(periodOrders, range.start, range.end)
+                exportReportPdf(salesOrders, range.start, range.end)
               }
               className={actionClass}
             >
@@ -113,10 +125,10 @@ export default function LaporanPenjualan() {
             </button>
             <button
               type="button"
-              disabled={!validRange}
+              disabled={!validRange || loading || error}
               title="Unduh CSV yang dapat dibuka di Excel"
               onClick={() =>
-                exportReportCsv(periodOrders, range.start, range.end)
+                exportReportCsv(salesOrders, range.start, range.end)
               }
               className="inline-flex items-center gap-2 rounded-full bg-baked px-4 py-2 text-xs font-semibold text-white shadow-soft hover:bg-terracotta disabled:opacity-40"
             >
@@ -125,6 +137,10 @@ export default function LaporanPenjualan() {
             </button>
             <p className="w-full text-[10px] text-muted">
               Export Excel tersedia dalam format CSV.
+            </p>
+            <p className="w-full text-[10px] text-muted">
+              PDF berisi ringkasan dan transaksi; gunakan Cetak Laporan untuk
+              grafik.
             </p>
           </div>
         </div>
@@ -135,60 +151,91 @@ export default function LaporanPenjualan() {
           </p>
         )}
       </header>
-      <section
-        aria-label="Ringkasan penjualan"
-        className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
-      >
-        <SalesStatCard
-          label="Total Pendapatan"
-          value={formatRupiah(stats.total)}
-          icon="money"
-        />
-        <SalesStatCard
-          label="Total Pesanan"
-          value={`${stats.count} Pesanan`}
-          icon="bag"
-        />
-        <SalesStatCard
-          label="Rata-rata Order (AOV)"
-          value={formatRupiah(Math.round(stats.aov))}
-          icon="sparkles"
-        />
-        <SalesStatCard
-          label="Produk Terlaris"
-          value={stats.top?.name || 'Belum ada produk terjual'}
-          detail={stats.top ? `${stats.top.quantity} pcs` : undefined}
-          icon="cookie"
-        />
-      </section>
-      <p className="text-xs leading-5 text-muted">
-        Ringkasan mencakup seluruh nilai pesanan checkout pada periode ini,
-        termasuk pesanan menunggu verifikasi atau dibatalkan. Data demo tidak
-        dihitung.
-      </p>
-      <SalesTrendChart
-        orders={periodOrders}
-        start={range.start}
-        end={range.end}
-        validRange={validRange}
-      />
-      <TransactionsTable
-        orders={filtered}
-        query={query}
-        onQuery={(value) => {
-          setParams(value ? { q: value } : {}, { replace: true })
-          setPage(1)
-        }}
-        payment={payment}
-        onPayment={(value) => {
-          setPayment(value)
-          setPage(1)
-        }}
-        page={page}
-        onPage={setPage}
-        onExport={() => exportReportCsv(filtered, range.start, range.end)}
-        emptyPeriod={!periodOrders.length}
-      />
+      {loading ? (
+        <p
+          role="status"
+          className="rounded-2xl bg-white p-10 text-center text-muted shadow-soft"
+        >
+          Memuat laporan penjualan...
+        </p>
+      ) : error ? (
+        <div
+          role="alert"
+          className="rounded-2xl bg-white p-10 text-center text-muted shadow-soft"
+        >
+          <p>Gagal memuat laporan penjualan.</p>
+          <button
+            type="button"
+            onClick={retry}
+            className="mt-3 text-baked underline"
+          >
+            Coba lagi
+          </button>
+        </div>
+      ) : (
+        <>
+          <section
+            aria-label="Ringkasan penjualan"
+            className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
+          >
+            <SalesStatCard
+              label="Total Pendapatan"
+              value={formatRupiah(stats.total)}
+              icon="money"
+            />
+            <SalesStatCard
+              label="Total Pesanan"
+              value={`${stats.count} Pesanan`}
+              icon="bag"
+            />
+            <SalesStatCard
+              label="Rata-rata Order (AOV)"
+              value={formatRupiah(Math.round(stats.aov))}
+              icon="sparkles"
+            />
+            <SalesStatCard
+              label="Produk Terlaris"
+              value={stats.top?.name || 'Belum ada produk terjual'}
+              detail={stats.top ? `${stats.top.quantity} pcs` : undefined}
+              icon="cookie"
+            />
+          </section>
+          <p className="text-xs leading-5 text-muted">
+            Ringkasan dan grafik menghitung pesanan berstatus pembayaran Lunas,
+            kecuali pesanan yang dibatalkan. Pendapatan memakai total pesanan,
+            termasuk ongkir. Tabel memuat semua transaksi pada periode terpilih.
+          </p>
+          <SalesTrendChart
+            orders={salesOrders}
+            start={range.start}
+            end={range.end}
+            validRange={validRange}
+          />
+          <TransactionsTable
+            orders={filtered}
+            query={query}
+            onQuery={(value) => {
+              setParams(value ? { q: value } : {}, { replace: true })
+              setPage(1)
+            }}
+            payment={payment}
+            onPayment={(value) => {
+              setPayment(value)
+              setPage(1)
+            }}
+            orderStatus={orderStatus}
+            onOrderStatus={(value) => {
+              setOrderStatus(value)
+              setPage(1)
+            }}
+            page={page}
+            onPage={setPage}
+            onExport={() => exportReportCsv(filtered, range.start, range.end)}
+            emptyPeriod={!periodOrders.length}
+            emptyFiltered={!filtered.length && periodOrders.length > 0}
+          />
+        </>
+      )}
     </div>
   )
 }

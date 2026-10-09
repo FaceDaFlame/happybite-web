@@ -1,6 +1,8 @@
 import Icon from '@/components/Icon'
 import { customerName, initials, orderKey } from '@/data/orderFulfillment'
 import { formatOrderDate, formatRupiah } from '@/data/orderHistory'
+import { orderStatusLabels } from '@/services/adminOrderService'
+import { paymentStatusLabel } from '../utils/salesReport'
 
 export default function TransactionsTable({
   orders,
@@ -8,10 +10,13 @@ export default function TransactionsTable({
   onQuery,
   payment,
   onPayment,
+  orderStatus,
+  onOrderStatus,
   page,
   onPage,
   onExport,
   emptyPeriod,
+  emptyFiltered,
 }) {
   const pageSize = 6
   const pageCount = Math.max(1, Math.ceil(orders.length / pageSize))
@@ -51,9 +56,23 @@ export default function TransactionsTable({
             className="rounded-full border-0 bg-blush/70 px-3 py-2 text-xs focus-visible:outline-baked"
           >
             <option value="all">Semua Pembayaran</option>
-            <option value="paid">Lunas</option>
-            <option value="pending">Menunggu Verifikasi</option>
-            <option value="cancelled">Dibatalkan</option>
+            <option value="lunas">Lunas</option>
+            <option value="menunggu_verifikasi">Menunggu Verifikasi</option>
+            <option value="belum_dibayar">Belum Dibayar</option>
+            <option value="ditolak">Ditolak</option>
+          </select>
+          <select
+            aria-label="Filter status pesanan"
+            value={orderStatus}
+            onChange={(e) => onOrderStatus(e.target.value)}
+            className="rounded-full border-0 bg-blush/70 px-3 py-2 text-xs focus-visible:outline-baked"
+          >
+            <option value="all">Semua Status Pesanan</option>
+            {Object.entries(orderStatusLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
           </select>
           <button
             type="button"
@@ -96,7 +115,11 @@ export default function TransactionsTable({
                     </time>
                   </td>
                   <td className="max-w-48 break-words px-3 py-5 font-bold text-baked">
-                    #{order.id}
+                    {order.number}
+                    <span className="mt-1 block text-[10px] font-normal text-muted">
+                      {orderStatusLabels[order.status] || order.status} ·{' '}
+                      {paymentStatusLabel(order)}
+                    </span>
                   </td>
                   <td className="px-3 py-5">
                     <div className="flex items-center gap-2">
@@ -136,7 +159,9 @@ export default function TransactionsTable({
         <p className="py-12 text-center text-sm text-muted">
           {emptyPeriod
             ? 'Belum ada transaksi pada periode ini'
-            : 'Tidak ada transaksi yang cocok dengan pencarian atau status pembayaran.'}
+            : emptyFiltered
+              ? 'Tidak ada transaksi yang cocok dengan pencarian atau status.'
+              : 'Tidak ada transaksi pada halaman ini.'}
         </p>
       )}
       <footer className="mt-5 flex flex-wrap items-center justify-between gap-4 text-xs text-muted">
