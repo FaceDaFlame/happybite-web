@@ -9,7 +9,6 @@ import Payment from '@/pages/Payment'
 import AccountPlaceholder from '@/pages/AccountPlaceholder'
 import OrderHistory from '@/pages/OrderHistory'
 import AdminLogin from '@/pages/admin/AdminLogin'
-import Dashboard from '@/pages/admin/Dashboard'
 import ManajemenProduk from '@/pages/admin/ManajemenProduk'
 import KelolaPesanan from '@/pages/admin/KelolaPesanan'
 import LaporanPenjualan from '@/pages/admin/LaporanPenjualan'
@@ -34,7 +33,7 @@ export default function AppRoutes({
       <Route path="/admin/login" element={<AdminLogin />} />
       <Route element={<AdminRoute />}>
         <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<Dashboard />} />
+          <Route index element={<Navigate to="produk" replace />} />
           <Route path="produk" element={<ManajemenProduk />} />
           <Route path="pesanan" element={<KelolaPesanan />} />
           <Route path="laporan" element={<LaporanPenjualan />} />

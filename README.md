@@ -118,14 +118,13 @@ src/pages/admin/
     AdminSidebar/      AdminSidebar.jsx, index.js
     AdminRoute/        AdminRoute.jsx, index.js
   AdminLogin/          AdminLogin.jsx, index.js, components/AdminLoginForm.jsx
-  Dashboard/           Dashboard.jsx, index.js, components/.gitkeep
   ManajemenProduk/     ManajemenProduk.jsx, index.js, components/, utils/
   KelolaPesanan/       KelolaPesanan.jsx, index.js, components/, utils/
   LaporanPenjualan/    LaporanPenjualan.jsx, index.js, components/, utils/
 ```
 
 - `/admin/login` is public and outside AdminLayout. Its form uses the same Supabase password login as the customer form. No mock credentials or hardcoded admin identity remain.
-- `/admin`, `/admin/produk`, `/admin/pesanan`, and `/admin/laporan` nest under AdminRoute and AdminLayout. Guards wait for the session and profile: guests redirect to `/admin/login`, authenticated non-admins to `/`.
+- `/admin` redirects to `/admin/produk`; `/admin/produk`, `/admin/pesanan`, and `/admin/laporan` nest under AdminRoute and AdminLayout. Guards wait for the session and profile: guests redirect to `/admin/login`, authenticated non-admins to `/`.
 - Sidebar NavLinks highlight the active page. Pengaturan Dapur remains a placeholder; Keluar awaits Supabase signOut and returns home.
 - Admin access comes only from `profiles.role = admin`; signup never sends a role or inserts a profile. Admin jobTitle remains `Head Baker & Owner`. Configure database RLS to allow users to read their own profile without allowing them to promote their role.
 - Supabase integration checks use intercepted Auth/profile HTTP responses, covering session restoration, redirects, errors, signup confirmation, admin/customer roles and sign-out. Existing demo-auth browser scripts predate this migration.

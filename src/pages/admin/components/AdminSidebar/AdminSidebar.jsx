@@ -4,7 +4,6 @@ import Icon from '@/components/Icon'
 import { useState } from 'react'
 
 const menuItems = [
-  ['Ringkasan Bisnis', '/admin'],
   ['Manajemen Produk', '/admin/produk'],
   ['Kelola Pesanan', '/admin/pesanan'],
   ['Laporan Penjualan', '/admin/laporan'],
@@ -39,7 +38,7 @@ export default function AdminSidebar() {
             }
           >
             <Icon
-              name={['money', 'cookie', 'receipt', 'money'][index]}
+              name={['cookie', 'receipt', 'money'][index]}
               className="h-4 w-4"
             />
             {label}
